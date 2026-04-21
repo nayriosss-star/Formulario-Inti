@@ -4,7 +4,7 @@ const { MongoClient } = require('mongodb');
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
-
+app.use(express.static('public')); // Sirve archivos estáticos (CSS)
 const PORT = process.env.PORT || 3000;
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://nayriosss_db_user:fNy8tCN6f6TWw6QX@cluster0.efr0t7e.mongodb.net/?appName=Cluster0';
@@ -45,14 +45,14 @@ const preguntasVF = [
     { id: 5, texto: "El corazón humano tiene 4 cavidades", correcta: true }
 ];
 
-// Función para generar el formulario HTML
+// Función para generar el formulario HTML (sin CSS interno)
 function generarFormulario() {
     let mcHtml = '';
     preguntasMC.forEach(p => {
         mcHtml += `
-            <div style="margin-bottom: 20px;">
-                <strong>${p.id}. ${p.texto}</strong><br>
-                <select name="mc_${p.id}" required style="padding: 5px; width: 100%; max-width: 300px;">
+            <div class="question-card">
+                <label class="question-text">${p.id}. ${p.texto}</label>
+                <select name="mc_${p.id}" class="form-select" required>
                     <option value="">Seleccioná una opción</option>
                     ${p.opciones.map(op => `<option value="${op}">${op}</option>`).join('')}
                 </select>
@@ -63,56 +63,67 @@ function generarFormulario() {
     let vfHtml = '';
     preguntasVF.forEach(p => {
         vfHtml += `
-            <div style="margin-bottom: 20px;">
-                <strong>${p.id + preguntasMC.length}. ${p.texto}</strong><br>
-                <label><input type="radio" name="vf_${p.id}" value="true" required> Verdadero</label>
-                <label><input type="radio" name="vf_${p.id}" value="false" required> Falso</label>
+            <div class="question-card">
+                <label class="question-text">${p.id + preguntasMC.length}. ${p.texto}</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="vf_${p.id}" value="true" required> Verdadero
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="vf_${p.id}" value="false" required> Falso
+                    </label>
+                </div>
             </div>
         `;
     });
 
     return `
         <!DOCTYPE html>
-        <html>
+        <html lang="es">
         <head>
-            <title>Formulario de Trabajo</title>
+            <title>Formulario de Evaluación</title>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-                .form-group { margin-bottom: 20px; }
-                label { font-weight: bold; }
-                input, select { padding: 8px; margin-top: 5px; }
-                button { background-color: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
-                button:hover { background-color: #0056b3; }
-                .correcto { color: green; }
-                .incorrecto { color: red; }
-            </style>
+            <link rel="stylesheet" href="/styles.css">
         </head>
         <body>
-            <h1>Formulario de Trabajo</h1>
-            <form method="POST" action="/">
-                <div class="form-group">
-                    <label>Nombre:</label><br>
-                    <input type="text" name="nombre" required style="width: 100%; padding: 8px;">
-                </div>
-                <div class="form-group">
-                    <label>Apellido:</label><br>
-                    <input type="text" name="apellido" required style="width: 100%; padding: 8px;">
-                </div>
-                <div class="form-group">
-                    <label>DNI (7 u 8 números):</label><br>
-                    <input type="text" name="dni" required style="width: 100%; padding: 8px;">
+            <div class="container">
+                <div class="header">
+                    <h1>📋 Formulario de Evaluación</h1>
+                    <p>Completá todos los campos para participar</p>
                 </div>
                 
-                <h2>Preguntas de opción múltiple</h2>
-                ${mcHtml}
+                <div class="form-content">
+                    <form method="POST" action="/">
+                        <div class="form-group">
+                            <label>👤 Nombre:</label>
+                            <input type="text" name="nombre" placeholder="Tu nombre" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📝 Apellido:</label>
+                            <input type="text" name="apellido" placeholder="Tu apellido" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🆔 DNI (7 u 8 números):</label>
+                            <input type="text" name="dni" placeholder="Ej: 12345678" required>
+                        </div>
+                        
+                        <div class="section-title">📌 Preguntas de Opción Múltiple</div>
+                        ${mcHtml}
+                        
+                        <div class="section-title">✓ Verdadero o Falso</div>
+                        ${vfHtml}
+                        
+                        <button type="submit" class="submit-btn">🚀 Enviar respuestas</button>
+                    </form>
+                </div>
                 
-                <h2>Preguntas Verdadero o Falso</h2>
-                ${vfHtml}
-                
-                <button type="submit">Enviar respuestas</button>
-            </form>
+                <div class="footer">
+                    <p>Podés realizar el formulario hasta 2 veces por DNI</p>
+                </div>
+            </div>
         </body>
         </html>
     `;
@@ -192,27 +203,108 @@ app.post('/', async (req, res) => {
         await respuestasCollection.insertOne(nuevaRespuesta);
         console.log(`📝 ${nombreLimpio} ${apellidoLimpio} (${dniLimpio}) - Intento ${intentos + 1}: ${totalAciertos}/${totalPreguntas} aciertos`);
 
-        // Mostrar resultado (solo la cantidad de aciertos, no las respuestas correctas)
+        // Mostrar resultado con CSS moderno
         return res.send(`
             <!DOCTYPE html>
-            <html>
+            <html lang="es">
             <head>
                 <title>Resultado del Formulario</title>
                 <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
-                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-                    .aciertos { font-size: 48px; color: #007bff; margin: 20px 0; }
-                    button { background-color: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        padding: 20px;
+                    }
+                    
+                    .result-card {
+                        background: white;
+                        border-radius: 20px;
+                        padding: 50px;
+                        text-align: center;
+                        max-width: 500px;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        animation: fadeIn 0.5s ease;
+                    }
+                    
+                    @keyframes fadeIn {
+                        from {
+                            opacity: 0;
+                            transform: translateY(-20px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+                    
+                    .result-card h1 {
+                        color: #333;
+                        margin-bottom: 20px;
+                        font-size: 2em;
+                    }
+                    
+                    .result-card p {
+                        color: #666;
+                        margin-bottom: 15px;
+                        font-size: 1.1em;
+                    }
+                    
+                    .score {
+                        font-size: 64px;
+                        font-weight: bold;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                        margin: 20px 0;
+                    }
+                    
+                    .attempts {
+                        background: #f0f0f0;
+                        padding: 10px;
+                        border-radius: 10px;
+                        margin: 20px 0;
+                    }
+                    
+                    .btn {
+                        display: inline-block;
+                        padding: 12px 30px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 25px;
+                        margin-top: 20px;
+                        transition: transform 0.2s ease;
+                    }
+                    
+                    .btn:hover {
+                        transform: translateY(-2px);
+                    }
                 </style>
             </head>
             <body>
-                <h1>¡Formulario completado!</h1>
-                <p>Gracias por participar, ${nombreLimpio} ${apellidoLimpio}.</p>
-                <div class="aciertos">${totalAciertos} / ${totalPreguntas}</div>
-                <p>Respuestas correctas de ${totalPreguntas} preguntas.</p>
-                <p>Intentos restantes: ${2 - (intentos + 1)}</p>
-                <br>
-                <a href="/"><button>Volver al inicio</button></a>
+                <div class="result-card">
+                    <h1>🎉 ¡Formulario completado!</h1>
+                    <p>Gracias por participar, <strong>${nombreLimpio} ${apellidoLimpio}</strong></p>
+                    <div class="score">${totalAciertos} / ${totalPreguntas}</div>
+                    <p>Respuestas correctas de ${totalPreguntas} preguntas</p>
+                    <div class="attempts">
+                        Intentos restantes: ${2 - (intentos + 1)}
+                    </div>
+                    <a href="/" class="btn">📝 Volver al inicio</a>
+                </div>
             </body>
             </html>
         `);
@@ -235,23 +327,40 @@ app.get('/admin/ver-respuestas', async (req, res) => {
             return res.send("No hay respuestas aún.<br><br><a href='/'>Volver al inicio</a>");
         }
 
-        let html = "<h2>Respuestas guardadas</h2>";
-        html += `<p>Total de intentos: ${respuestas.length}</p>`;
-        html += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>";
-        html += "<tr><th>#</th><th>Nombre</th><th>Apellido</th><th>DNI</th><th>Intento</th><th>Aciertos</th><th>Fecha</th></tr>";
-        
-        respuestas.forEach((r, index) => {
-            html += `<tr>
-                        <td>${index + 1}</td>
-                        <td>${r.nombre}</td>
-                        <td>${r.apellido}</td>
-                        <td>${r.dni}</td>
-                        <td>${r.intento}</td>
-                        <td>${r.totalAciertos}/${r.totalPreguntas}</td>
-                        <td>${new Date(r.fecha).toLocaleString()}</td>
-                     </tr>`;
-        });
-        html += "</table><br><a href='/'>Volver al inicio</a>";
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Administración - Respuestas</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 50px auto; padding: 20px; }
+                    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #667eea; color: white; }
+                    tr:nth-child(even) { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+                <h2>Respuestas guardadas</h2>
+                <p>Total de intentos: ${respuestas.length}</p>
+                <table>
+                    <tr><th>#</th><th>Nombre</th><th>Apellido</th><th>DNI</th><th>Intento</th><th>Aciertos</th><th>Fecha</th></tr>
+                    ${respuestas.map((r, index) => `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${r.nombre}</td>
+                            <td>${r.apellido}</td>
+                            <td>${r.dni}</td>
+                            <td>${r.intento}</td>
+                            <td>${r.totalAciertos}/${r.totalPreguntas}</td>
+                            <td>${new Date(r.fecha).toLocaleString()}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+                <br><a href="/">Volver al inicio</a>
+            </body>
+            </html>
+        `;
         res.send(html);
     } catch (error) {
         res.send("Error al leer las respuestas.<br><br><a href='/'>Volver al inicio</a>");
@@ -272,12 +381,24 @@ app.get('/admin/stats', async (req, res) => {
         ]).toArray();
 
         res.send(`
-            <h2>Estadísticas del formulario</h2>
-            <p>Total de intentos: ${totalIntentos}</p>
-            <p>Personas que participaron: ${personasUnicas.length}</p>
-            <p>Promedio de aciertos: ${promedioAciertos[0] ? promedioAciertos[0].promedio.toFixed(2) : 0} / 10</p>
-            <br><a href="/">Volver al inicio</a>
-            <br><a href="/admin/ver-respuestas">Ver todas las respuestas</a>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Administración - Estadísticas</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+                    .stat { font-size: 36px; color: #667eea; margin: 10px 0; }
+                </style>
+            </head>
+            <body>
+                <h2>Estadísticas del formulario</h2>
+                <p><strong>Total de intentos:</strong> <span class="stat">${totalIntentos}</span></p>
+                <p><strong>Personas que participaron:</strong> <span class="stat">${personasUnicas.length}</span></p>
+                <p><strong>Promedio de aciertos:</strong> <span class="stat">${promedioAciertos[0] ? promedioAciertos[0].promedio.toFixed(2) : 0} / 10</span></p>
+                <br><a href="/">Volver al inicio</a>
+                <br><a href="/admin/ver-respuestas">Ver todas las respuestas</a>
+            </body>
+            </html>
         `);
     } catch (error) {
         res.send("Error al calcular estadísticas.<br><br><a href='/'>Volver al inicio</a>");
