@@ -7,22 +7,25 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
-// ⚠️ IMPORTANTE: Reemplazá esta cadena con la que copiaste de MongoDB
-// En lugar de <password>, poné la contraseña que creaste
-const MONGODB_URI = 'mongodb+srv://nayriosss_db_user:fNy8tCN6f6TWw6QX@cluster0.efr0t7e.mongodb.net/?appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://nayriosss_db_user:fNy8tCN6f6TWw6QX@cluster0.efr0t7e.mongodb.net/?appName=Cluster0';
+
 let db;
 let respuestasCollection;
+let mongoConnected = false;
 
 // Conectar a MongoDB
 async function conectarMongoDB() {
     try {
+        console.log('🔄 Conectando a MongoDB...');
         const client = new MongoClient(MONGODB_URI);
         await client.connect();
         console.log('✅ Conectado a MongoDB');
         db = client.db('formulario_db');
         respuestasCollection = db.collection('respuestas');
+        mongoConnected = true;
     } catch (error) {
-        console.error('❌ Error conectando a MongoDB:', error);
+        console.error('❌ Error conectando a MongoDB:', error.message);
+        mongoConnected = false;
     }
 }
 
@@ -36,6 +39,7 @@ app.get('/', (req, res) => {
             <input type="text" name="respuesta" required><br><br>
             <button type="submit">Enviar</button>
         </form>
+        <footer><small>Estado MongoDB: ${mongoConnected ? '✅ Conectado' : '❌ Desconectado'}</small></footer>
     `);
 });
 
@@ -56,70 +60,96 @@ app.post('/', async (req, res) => {
         return res.send(`DNI inválido. Debe tener 7 u 8 números.<br><br><a href="/">Volver al inicio</a>`);
     }
 
-    // Verificar si el DNI ya existe en MongoDB
-    const yaRespondio = await respuestasCollection.findOne({ dni: dniLimpio });
-    if (yaRespondio) {
-        return res.send(`Este DNI ya completó el formulario.<br><br><a href="/">Volver al inicio</a>`);
+    // Verificar si MongoDB está conectado
+    if (!mongoConnected) {
+        return res.send(`Error: Base de datos no disponible. Por favor intentá más tarde.<br><br><a href="/">Volver al inicio</a>`);
     }
 
-    const esCorrecta = respuestaLimpia === "buenos aires";
-    
-    // Guardar en MongoDB
-    const nuevaRespuesta = {
-        dni: dniLimpio,
-        respuesta: respuestaLimpia,
-        fecha: new Date(),
-        estado: esCorrecta ? "correcta" : "incorrecta"
-    };
-    
-    await respuestasCollection.insertOne(nuevaRespuesta);
-    console.log(`📝 Guardado: ${dniLimpio} - ${esCorrecta ? "Correcta" : "Incorrecta"}`);
+    try {
+        // Verificar si el DNI ya existe en MongoDB
+        const yaRespondio = await respuestasCollection.findOne({ dni: dniLimpio });
+        if (yaRespondio) {
+            return res.send(`Este DNI ya completó el formulario.<br><br><a href="/">Volver al inicio</a>`);
+        }
 
-    if (esCorrecta) {
-        return res.send(`<h2>¡Formulario completado correctamente!</h2><p>Gracias por participar.</p><a href="/">Volver al inicio</a>`);
-    } else {
-        return res.send(`<h2>Respuesta incorrecta</h2><p>La capital de Argentina es Buenos Aires.</p><a href="/">Intentar de nuevo</a>`);
+        const esCorrecta = respuestaLimpia === "buenos aires";
+        
+        // Guardar en MongoDB
+        const nuevaRespuesta = {
+            dni: dniLimpio,
+            respuesta: respuestaLimpia,
+            fecha: new Date(),
+            estado: esCorrecta ? "correcta" : "incorrecta"
+        };
+        
+        await respuestasCollection.insertOne(nuevaRespuesta);
+        console.log(`📝 Guardado: ${dniLimpio} - ${esCorrecta ? "Correcta" : "Incorrecta"}`);
+
+        if (esCorrecta) {
+            return res.send(`<h2>¡Formulario completado correctamente!</h2><p>Gracias por participar.</p><a href="/">Volver al inicio</a>`);
+        } else {
+            return res.send(`<h2>Respuesta incorrecta</h2><p>La capital de Argentina es Buenos Aires.</p><a href="/">Intentar de nuevo</a>`);
+        }
+    } catch (error) {
+        console.error('Error al guardar:', error);
+        return res.send(`Error al guardar los datos. Intentá nuevamente.<br><br><a href="/">Volver al inicio</a>`);
     }
 });
 
 // Admin: Ver todas las respuestas
 app.get('/admin/ver-respuestas', async (req, res) => {
-    const respuestas = await respuestasCollection.find({}).toArray();
-    
-    if (respuestas.length === 0) {
-        return res.send("No hay respuestas aún.<br><br><a href='/'>Volver al inicio</a>");
+    if (!mongoConnected) {
+        return res.send("Base de datos no disponible.<br><br><a href='/'>Volver al inicio</a>");
     }
 
-    let html = "<h2>Respuestas guardadas</h2>";
-    html += "<p>Total: " + respuestas.length + " respuestas</p>";
-    html += "<ul>";
-    respuestas.forEach((r, index) => {
-        html += `<li>${index + 1}. DNI: ${r.dni} - ${r.estado === "correcta" ? "✅ Correcta" : "❌ Incorrecta"} - ${new Date(r.fecha).toLocaleString()}</li>`;
-    });
-    html += "</ul><br><a href='/'>Volver al inicio</a>";
-    res.send(html);
+    try {
+        const respuestas = await respuestasCollection.find({}).toArray();
+        
+        if (respuestas.length === 0) {
+            return res.send("No hay respuestas aún.<br><br><a href='/'>Volver al inicio</a>");
+        }
+
+        let html = "<h2>Respuestas guardadas</h2>";
+        html += "<p>Total: " + respuestas.length + "respuestas</p>";
+        html += "<ul>";
+        respuestas.forEach((r, index) => {
+            html += `<li>${index + 1}. DNI: ${r.dni} - ${r.estado === "correcta" ? "✅ Correcta" : "❌ Incorrecta"} - ${new Date(r.fecha).toLocaleString()}</li>`;
+        });
+        html += "</ul><br><a href='/'>Volver al inicio</a>";
+        res.send(html);
+    } catch (error) {
+        res.send("Error al leer las respuestas.<br><br><a href='/'>Volver al inicio</a>");
+    }
 });
 
 // Admin: Estadísticas
 app.get('/admin/stats', async (req, res) => {
-    const total = await respuestasCollection.countDocuments();
-    const correctas = await respuestasCollection.countDocuments({ estado: "correcta" });
-    const incorrectas = total - correctas;
-    const porcentajeCorrectas = total > 0 ? (correctas / total * 100).toFixed(2) : 0;
+    if (!mongoConnected) {
+        return res.send("Base de datos no disponible.<br><br><a href='/'>Volver al inicio</a>");
+    }
 
-    res.send(`
-        <h2>Estadísticas del formulario</h2>
-        <p>Total de respuestas: ${total}</p>
-        <p>Correctas: ${correctas}</p>
-        <p>Incorrectas: ${incorrectas}</p>
-        <p>Tasa de aciertos: ${porcentajeCorrectas}%</p>
-        <br><a href="/">Volver al inicio</a>
-        <br><a href="/admin/ver-respuestas">Ver todas las respuestas</a>
-    `);
+    try {
+        const total = await respuestasCollection.countDocuments();
+        const correctas = await respuestasCollection.countDocuments({ estado: "correcta" });
+        const incorrectas = total - correctas;
+        const porcentajeCorrectas = total > 0 ? (correctas / total * 100).toFixed(2) : 0;
+
+        res.send(`
+            <h2>Estadísticas del formulario</h2>
+            <p>Total de respuestas: ${total}</p>
+            <p>Correctas: ${correctas}</p>
+            <p>Incorrectas: ${incorrectas}</p>
+            <p>Tasa de aciertos: ${porcentajeCorrectas}%</p>
+            <br><a href="/">Volver al inicio</a>
+            <br><a href="/admin/ver-respuestas">Ver todas las respuestas</a>
+        `);
+    } catch (error) {
+        res.send("Error al calcular estadísticas.<br><br><a href='/'>Volver al inicio</a>");
+    }
 });
 
-// Iniciar servidor
-app.listen(PORT, '0.0.0.0', async () => {
-    await conectarMongoDB();
+// Iniciar servidor PRIMERO, luego conectar MongoDB
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    conectarMongoDB(); // Conectar después de que el servidor arranque
 });
