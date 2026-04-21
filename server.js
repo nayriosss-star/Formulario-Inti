@@ -1,26 +1,32 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const fs = require('fs');
-const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
-const ARCHIVO_RESPUESTAS = path.join(__dirname, 'respuestas.json');
-let respuestas = [];
+// ⚠️ IMPORTANTE: Reemplazá esta cadena con la que copiaste de MongoDB
+// En lugar de <password>, poné la contraseña que creaste
+const MONGODB_URI = 'mongodb+srv://nayriosss_db_user:fNy8tCN6f6TWw6QX@cluster0.efr0t7e.mongodb.net/?appName=Cluster0';
+let db;
+let respuestasCollection;
 
-if (fs.existsSync(ARCHIVO_RESPUESTAS)) {
-    const data = fs.readFileSync(ARCHIVO_RESPUESTAS, 'utf8');
-    respuestas = JSON.parse(data);
-    console.log(`📊 Cargadas ${respuestas.length} respuestas existentes`);
+// Conectar a MongoDB
+async function conectarMongoDB() {
+    try {
+        const client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        console.log('✅ Conectado a MongoDB');
+        db = client.db('formulario_db');
+        respuestasCollection = db.collection('respuestas');
+    } catch (error) {
+        console.error('❌ Error conectando a MongoDB:', error);
+    }
 }
 
-function guardarRespuestas() {
-    fs.writeFileSync(ARCHIVO_RESPUESTAS, JSON.stringify(respuestas, null, 2));
-}
-
+// Mostrar formulario
 app.get('/', (req, res) => {
     res.send(`
         <form method="POST" action="/">
@@ -33,55 +39,53 @@ app.get('/', (req, res) => {
     `);
 });
 
-app.post('/', (req, res) => {
+// Procesar respuestas
+app.post('/', async (req, res) => {
     const { dni, respuesta } = req.body;
 
     const dniLimpio = dni.trim();
     const respuestaLimpia = respuesta.trim().toLowerCase();
 
+    // Validaciones
     if (!dniLimpio || !respuestaLimpia) {
         return res.send(`No puede dejar campos vacíos.<br><br><a href="/">Volver al inicio</a>`);
     }
 
     const dniValido = /^\d{7,8}$/.test(dniLimpio) && !/^0+$/.test(dniLimpio);
-
     if (!dniValido) {
         return res.send(`DNI inválido. Debe tener 7 u 8 números.<br><br><a href="/">Volver al inicio</a>`);
     }
 
-    const yaRespondio = respuestas.some(r => r.dni === dniLimpio);
+    // Verificar si el DNI ya existe en MongoDB
+    const yaRespondio = await respuestasCollection.findOne({ dni: dniLimpio });
     if (yaRespondio) {
         return res.send(`Este DNI ya completó el formulario.<br><br><a href="/">Volver al inicio</a>`);
     }
 
-    if (respuestaLimpia === "buenos aires") {
-        const nuevaRespuesta = {
-            dni: dniLimpio,
-            respuesta: respuestaLimpia,
-            fecha: new Date().toISOString(),
-            estado: "correcta"
-        };
-        respuestas.push(nuevaRespuesta);
-        guardarRespuestas();
-        console.log("✅ Nuevo registro - DNI:", dniLimpio);
+    const esCorrecta = respuestaLimpia === "buenos aires";
+    
+    // Guardar en MongoDB
+    const nuevaRespuesta = {
+        dni: dniLimpio,
+        respuesta: respuestaLimpia,
+        fecha: new Date(),
+        estado: esCorrecta ? "correcta" : "incorrecta"
+    };
+    
+    await respuestasCollection.insertOne(nuevaRespuesta);
+    console.log(`📝 Guardado: ${dniLimpio} - ${esCorrecta ? "Correcta" : "Incorrecta"}`);
 
+    if (esCorrecta) {
         return res.send(`<h2>¡Formulario completado correctamente!</h2><p>Gracias por participar.</p><a href="/">Volver al inicio</a>`);
     } else {
-        const nuevaRespuesta = {
-            dni: dniLimpio,
-            respuesta: respuestaLimpia,
-            fecha: new Date().toISOString(),
-            estado: "incorrecta"
-        };
-        respuestas.push(nuevaRespuesta);
-        guardarRespuestas();
-        console.log("❌ Respuesta incorrecta - DNI:", dniLimpio);
-
         return res.send(`<h2>Respuesta incorrecta</h2><p>La capital de Argentina es Buenos Aires.</p><a href="/">Intentar de nuevo</a>`);
     }
 });
 
-app.get('/admin/ver-respuestas', (req, res) => {
+// Admin: Ver todas las respuestas
+app.get('/admin/ver-respuestas', async (req, res) => {
+    const respuestas = await respuestasCollection.find({}).toArray();
+    
     if (respuestas.length === 0) {
         return res.send("No hay respuestas aún.<br><br><a href='/'>Volver al inicio</a>");
     }
@@ -96,9 +100,10 @@ app.get('/admin/ver-respuestas', (req, res) => {
     res.send(html);
 });
 
-app.get('/admin/stats', (req, res) => {
-    const total = respuestas.length;
-    const correctas = respuestas.filter(r => r.estado === "correcta").length;
+// Admin: Estadísticas
+app.get('/admin/stats', async (req, res) => {
+    const total = await respuestasCollection.countDocuments();
+    const correctas = await respuestasCollection.countDocuments({ estado: "correcta" });
     const incorrectas = total - correctas;
     const porcentajeCorrectas = total > 0 ? (correctas / total * 100).toFixed(2) : 0;
 
@@ -113,4 +118,8 @@ app.get('/admin/stats', (req, res) => {
     `);
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
+// Iniciar servidor
+app.listen(PORT, '0.0.0.0', async () => {
+    await conectarMongoDB();
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+});
