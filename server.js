@@ -45,13 +45,12 @@ const preguntasVF = [
     { id: 5, texto: "El corazón humano tiene 4 cavidades", correcta: true }
 ];
 
-// Función para generar el formulario HTML (sin CSS interno)
 function generarFormulario() {
     let mcHtml = '';
     preguntasMC.forEach(p => {
         mcHtml += `
             <div class="question-card">
-                <label class="question-text">${p.id}. ${p.texto}</label>
+                <div class="question-text">${p.id}. ${p.texto}</div>
                 <select name="mc_${p.id}" class="form-select" required>
                     <option value="">Seleccioná una opción</option>
                     ${p.opciones.map(op => `<option value="${op}">${op}</option>`).join('')}
@@ -64,7 +63,7 @@ function generarFormulario() {
     preguntasVF.forEach(p => {
         vfHtml += `
             <div class="question-card">
-                <label class="question-text">${p.id + preguntasMC.length}. ${p.texto}</label>
+                <div class="question-text">${p.id + preguntasMC.length}. ${p.texto}</div>
                 <div class="radio-group">
                     <label class="radio-label">
                         <input type="radio" name="vf_${p.id}" value="true" required> Verdadero
@@ -83,8 +82,8 @@ function generarFormulario() {
         <head>
             <title>Formulario de Evaluación</title>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <link rel="stylesheet" href="/styles.css?v=3">
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+            <link rel="stylesheet" href="/styles.css">
         </head>
         <body>
             <div class="container">
@@ -92,34 +91,27 @@ function generarFormulario() {
                     <h1>📋 Formulario de Evaluación</h1>
                     <p>Completá todos los campos para participar</p>
                 </div>
-                
                 <div class="form-content">
                     <form method="POST" action="/">
                         <div class="form-group">
                             <label>👤 Nombre:</label>
                             <input type="text" name="nombre" placeholder="Tu nombre" required>
                         </div>
-                        
                         <div class="form-group">
                             <label>📝 Apellido:</label>
                             <input type="text" name="apellido" placeholder="Tu apellido" required>
                         </div>
-                        
                         <div class="form-group">
                             <label>🆔 DNI (7 u 8 números):</label>
                             <input type="text" name="dni" placeholder="Ej: 12345678" required>
                         </div>
-                        
                         <div class="section-title">📌 Preguntas de Opción Múltiple</div>
                         ${mcHtml}
-                        
                         <div class="section-title">✓ Verdadero o Falso</div>
                         ${vfHtml}
-                        
                         <button type="submit" class="submit-btn">🚀 Enviar respuestas</button>
                     </form>
                 </div>
-                
                 <div class="footer">
                     <p>Podés realizar el formulario hasta 2 veces por DNI</p>
                 </div>
