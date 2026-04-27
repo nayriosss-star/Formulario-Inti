@@ -157,6 +157,39 @@ function generarFormulario(nombre, apellido, dni, intento) {
         </html>
     `;
 }
+// Pantalla inicial: solo pide identificación
+app.get('/', (req, res) => {
+    res.send(generarPantallaIdentificacion());
+});
+
+// Valida los datos y muestra las preguntas
+app.post('/identificacion', async (req, res) => {
+    const { nombre, apellido, dni } = req.body;
+    const nombreLimpio = nombre.trim();
+    const apellidoLimpio = apellido.trim();
+    const dniLimpio = dni.trim();
+
+    if (!nombreLimpio || !apellidoLimpio || !dniLimpio)
+        return res.send(generarPantallaIdentificacion('Completá todos los campos.'));
+
+    const dniValido = /^\d{7,8}$/.test(dniLimpio) && !/^0+$/.test(dniLimpio);
+    if (!dniValido)
+        return res.send(generarPantallaIdentificacion('DNI inválido. Debe tener 7 u 8 números.'));
+
+    if (!mongoConnected)
+        return res.send(generarPantallaIdentificacion('Base de datos no disponible. Intentá más tarde.'));
+
+    try {
+        const intentos = await respuestasCollection.countDocuments({ dni: dniLimpio });
+        if (intentos >= 2)
+            return res.send(generarPantallaIdentificacion('Este DNI ya utilizó sus 2 intentos permitidos.'));
+
+        res.send(generarFormulario(nombreLimpio, apellidoLimpio, dniLimpio, intentos + 1));
+    } catch (error) {
+        console.error(error);
+        return res.send(generarPantallaIdentificacion('Hubo un error al verificar tus datos. Intentá nuevamente.'));
+    }
+});
 // Procesar respuestas
 app.post('/', async (req, res) => {
     const { nombre, apellido, dni } = req.body;
