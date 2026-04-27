@@ -89,56 +89,74 @@ function generarPantallaIdentificacion(error = '') {
 }
 
 function generarFormulario(nombre, apellido, dni, intento) {
-    // ... (el código de mcHtml y vfHtml queda igual) ...
+    let mcHtml = '';
+    preguntasMC.forEach(p => {
+        mcHtml += `
+            <div class="question-card">
+                <div class="question-text">${p.id}. ${p.texto}</div>
+                <select name="mc_${p.id}" class="form-select" required>
+                    <option value="">Seleccioná una opción</option>
+                    ${p.opciones.map(op => `<option value="${op}">${op}</option>`).join('')}
+                </select>
+            </div>
+        `;
+    });
+
+    let vfHtml = '';
+    preguntasVF.forEach(p => {
+        vfHtml += `
+            <div class="question-card">
+                <div class="question-text">${p.id + preguntasMC.length}. ${p.texto}</div>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="vf_${p.id}" value="true" required> Verdadero
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="vf_${p.id}" value="false" required> Falso
+                    </label>
+                </div>
+            </div>
+        `;
+    });
 
     return `
-        ...
-        <div class="header">
-            <h1>📋 Formulario de Evaluación</h1>
-            <p>👤 <strong>${nombre} ${apellido}</strong> &nbsp;|&nbsp; Intento N° ${intento}</p>
-        </div>
-        <form method="POST" action="/">
-            <input type="hidden" name="nombre" value="${nombre}">
-            <input type="hidden" name="apellido" value="${apellido}">
-            <input type="hidden" name="dni" value="${dni}">
-            <!-- preguntas igual que antes -->
-        </form>
-        ...
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <title>Formulario de Evaluación</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+            <link rel="stylesheet" href="/styles.css">
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📋 Formulario de Evaluación</h1>
+                    <p>👤 <strong>${nombre} ${apellido}</strong> &nbsp;|&nbsp; Intento N° ${intento}</p>
+                </div>
+                <div class="form-content">
+                    <form method="POST" action="/">
+                        <input type="hidden" name="nombre" value="${nombre}">
+                        <input type="hidden" name="apellido" value="${apellido}">
+                        <input type="hidden" name="dni" value="${dni}">
+                        
+                        <div class="section-title">📌 Preguntas de Opción Múltiple</div>
+                        ${mcHtml}
+                        
+                        <div class="section-title">✓ Verdadero o Falso</div>
+                        ${vfHtml}
+                        
+                        <button type="submit" class="submit-btn">🚀 Enviar respuestas</button>
+                    </form>
+                </div>
+                <div class="footer">
+                    <p>Podés realizar el formulario hasta 2 veces por DNI</p>
+                </div>
+            </div>
+        </body>
+        </html>
     `;
 }
-
-// Pantalla inicial: solo pide identificación
-app.get('/', (req, res) => {
-    res.send(generarPantallaIdentificacion());
-});
-
-// Valida los datos y muestra las preguntas
-app.post('/identificacion', async (req, res) => {
-    const { nombre, apellido, dni } = req.body;
-    const nombreLimpio = nombre.trim();
-    const apellidoLimpio = apellido.trim();
-    const dniLimpio = dni.trim();
-
-    if (!nombreLimpio || !apellidoLimpio || !dniLimpio)
-        return res.send(generarPantallaIdentificacion('Completá todos los campos.'));
-
-    const dniValido = /^\d{7,8}$/.test(dniLimpio) && !/^0+$/.test(dniLimpio);
-    if (!dniValido)
-        return res.send(generarPantallaIdentificacion('DNI inválido. Debe tener 7 u 8 números.'));
-
-    if (!mongoConnected)
-        return res.send(generarPantallaIdentificacion('Base de datos no disponible. Intentá más tarde.'));
-
-    try {
-        const intentos = await respuestasCollection.countDocuments({ dni: dniLimpio });
-        if (intentos >= 2)
-            return res.send(generarPantallaIdentificacion('Este DNI ya utilizó sus 2 intentos permitidos.'));
-
-        res.send(generarFormulario(nombreLimpio, apellidoLimpio, dniLimpio, intentos + 1));
-    } catch (error) {
-        return res.send(generarPantallaIdentificacion('Hubo un error al verificar tus datos. Intentá nuevamente.'));
-    }
-});
 // Procesar respuestas
 app.post('/', async (req, res) => {
     const { nombre, apellido, dni } = req.body;
